@@ -135,6 +135,17 @@ int EthernetClass::maintain()
 		case DHCP_CHECK_NONE:
 			//nothing done
 			break;
+		case DHCP_CHECK_IN_PROCESS:
+			if(_dhcp->checkDHCPProcess() == 1){
+				rc = DHCP_CHECK_REBIND_OK;
+				SPI.beginTransaction(SPI_ETHERNET_SETTINGS);
+				W5100.setIPAddress(_dhcp->getLocalIp().raw_address());
+				W5100.setGatewayIp(_dhcp->getGatewayIp().raw_address());
+				W5100.setSubnetMask(_dhcp->getSubnetMask().raw_address());
+				SPI.endTransaction();
+				_dnsServerAddress = _dhcp->getDnsServerIp();
+			}
+			break;
 		case DHCP_CHECK_RENEW_OK:
 		case DHCP_CHECK_REBIND_OK:
 			//we might have got a new IP.

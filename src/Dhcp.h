@@ -50,6 +50,7 @@
 #define DHCP_CHECK_RENEW_OK     (2)
 #define DHCP_CHECK_REBIND_FAIL  (3)
 #define DHCP_CHECK_REBIND_OK    (4)
+#define DHCP_CHECK_IN_PROCESS   (5)
 
 enum
 {

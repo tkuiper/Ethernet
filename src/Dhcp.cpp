@@ -32,8 +32,8 @@ void DhcpClass::reset_DHCP_lease()
 	//return:0 on error, 1 if request is sent and response is received
 int DhcpClass::request_DHCP_lease()
 {
-	uint8_t messageType = 0;
-
+	int result = 0;
+	
 	// Pick an initial transaction ID
 	_dhcpTransactionId = random(1UL, 2000UL);
 	_dhcpInitialTransactionId = _dhcpTransactionId;
@@ -45,21 +45,36 @@ int DhcpClass::request_DHCP_lease()
 	}
 
 	presend_DHCP();
+	result = checkDHCPProcess();
+	if( result == 1){
+		// We're done with the socket now
+		_dhcpUdpSocket.stop();
+		_dhcpTransactionId++;
 
+		_lastCheckLeaseMillis = millis();
+	}
+	return result;
+}
+uint8_t DhcpClass::checkDHCPProcess()
+{
 	int result = 0;
+	uint8_t messageType = 0;
 
 	unsigned long startTime = millis();
 
-	while (_dhcp_state != STATE_DHCP_LEASED) {
+	if (_dhcp_state != STATE_DHCP_LEASED) {
 		if (_dhcp_state == STATE_DHCP_START) {
+			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_START");
 			_dhcpTransactionId++;
 			send_DHCP_MESSAGE(DHCP_DISCOVER, ((millis() - startTime) / 1000));
 			_dhcp_state = STATE_DHCP_DISCOVER;
 		} else if (_dhcp_state == STATE_DHCP_REREQUEST) {
+			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_REREQUEST");
 			_dhcpTransactionId++;
 			send_DHCP_MESSAGE(DHCP_REQUEST, ((millis() - startTime)/1000));
 			_dhcp_state = STATE_DHCP_REQUEST;
 		} else if (_dhcp_state == STATE_DHCP_DISCOVER) {
+			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_DISCOVER");
 			uint32_t respId;
 			messageType = parseDHCPResponse(_responseTimeout, respId);
 			if (messageType == DHCP_OFFER) {
@@ -70,6 +85,7 @@ int DhcpClass::request_DHCP_lease()
 				_dhcp_state = STATE_DHCP_REQUEST;
 			}
 		} else if (_dhcp_state == STATE_DHCP_REQUEST) {
+			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_REQUEST");
 			uint32_t respId;
 			messageType = parseDHCPResponse(_responseTimeout, respId);
 			if (messageType == DHCP_ACK) {
@@ -90,7 +106,12 @@ int DhcpClass::request_DHCP_lease()
 				}
 				_renewInSec = _dhcpT1;
 				_rebindInSec = _dhcpT2;
+				
+				// We're done with the socket now
+				_dhcpUdpSocket.stop();
+				_dhcpTransactionId++;
 			} else if (messageType == DHCP_NAK) {
+				Serial.println("DhcpClass::checkDHCPProcess() DHCP_NAK");
 				_dhcp_state = STATE_DHCP_START;
 			}
 		}
@@ -100,13 +121,11 @@ int DhcpClass::request_DHCP_lease()
 			_dhcp_state = STATE_DHCP_START;
 		}
 
-		if (result != 1 && ((millis() - startTime) > _timeout))
-			break;
+		if (result != 1 && ((millis() - startTime) > _timeout)){
+			Serial.println("DhcpClass::checkDHCPProcess() error");
+			return 255;
+		}
 	}
-
-	// We're done with the socket now
-	_dhcpUdpSocket.stop();
-	_dhcpTransactionId++;
 
 	_lastCheckLeaseMillis = millis();
 	return result;
@@ -244,8 +263,11 @@ uint8_t DhcpClass::parseDHCPResponse(unsigned long responseTimeout, uint32_t& tr
 		if ((millis() - startTime) > responseTimeout) {
 			return 255;
 		}
-		delay(50);
+		//delay(50);
+		Serial.println("DhcpClass::parseDHCPResponse() no response packet yet");
+		return 0;
 	}
+	Serial.println("DhcpClass::parseDHCPResponse() got response packet!");
 	// start reading in the packet
 	RIP_MSG_FIXED fixedMsg;
 	_dhcpUdpSocket.read((uint8_t*)&fixedMsg, sizeof(RIP_MSG_FIXED));
@@ -352,6 +374,9 @@ uint8_t DhcpClass::parseDHCPResponse(unsigned long responseTimeout, uint32_t& tr
 int DhcpClass::checkLease()
 {
 	int rc = DHCP_CHECK_NONE;
+	
+	if(_dhcp_state != STATE_DHCP_LEASED)
+		return DHCP_CHECK_IN_PROCESS;
 
 	unsigned long now = millis();
 	unsigned long elapsed = now - _lastCheckLeaseMillis;
