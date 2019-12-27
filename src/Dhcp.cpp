@@ -6,13 +6,14 @@
 #include "Dhcp.h"
 #include "utility/w5100.h"
 
-int DhcpClass::beginWithDHCP(uint8_t *mac, unsigned long timeout, unsigned long responseTimeout)
+int DhcpClass::beginWithDHCP(uint8_t *mac, unsigned long timeout, unsigned long responseTimeout, bool async)
 {
 	_dhcpLeaseTime=0;
 	_dhcpT1=0;
 	_dhcpT2=0;
 	_timeout = timeout;
 	_responseTimeout = responseTimeout;
+	_async = async;
 
 	// zero out _dhcpMacAddr
 	memset(_dhcpMacAddr, 0, 6);
@@ -45,7 +46,10 @@ int DhcpClass::request_DHCP_lease()
 	}
 
 	presend_DHCP();
-	result = checkDHCPProcess();
+	do{
+		result = checkDHCPProcess();
+	} while(result == 0 && !_async);
+	
 	if( result == 1){
 		// We're done with the socket now
 		_dhcpUdpSocket.stop();
@@ -64,17 +68,14 @@ uint8_t DhcpClass::checkDHCPProcess()
 
 	if (_dhcp_state != STATE_DHCP_LEASED) {
 		if (_dhcp_state == STATE_DHCP_START) {
-			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_START");
 			_dhcpTransactionId++;
 			send_DHCP_MESSAGE(DHCP_DISCOVER, ((millis() - startTime) / 1000));
 			_dhcp_state = STATE_DHCP_DISCOVER;
 		} else if (_dhcp_state == STATE_DHCP_REREQUEST) {
-			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_REREQUEST");
 			_dhcpTransactionId++;
 			send_DHCP_MESSAGE(DHCP_REQUEST, ((millis() - startTime)/1000));
 			_dhcp_state = STATE_DHCP_REQUEST;
 		} else if (_dhcp_state == STATE_DHCP_DISCOVER) {
-			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_DISCOVER");
 			uint32_t respId;
 			messageType = parseDHCPResponse(_responseTimeout, respId);
 			if (messageType == DHCP_OFFER) {
@@ -85,7 +86,6 @@ uint8_t DhcpClass::checkDHCPProcess()
 				_dhcp_state = STATE_DHCP_REQUEST;
 			}
 		} else if (_dhcp_state == STATE_DHCP_REQUEST) {
-			Serial.println("DhcpClass::checkDHCPProcess() STATE_DHCP_REQUEST");
 			uint32_t respId;
 			messageType = parseDHCPResponse(_responseTimeout, respId);
 			if (messageType == DHCP_ACK) {
@@ -111,7 +111,6 @@ uint8_t DhcpClass::checkDHCPProcess()
 				_dhcpUdpSocket.stop();
 				_dhcpTransactionId++;
 			} else if (messageType == DHCP_NAK) {
-				Serial.println("DhcpClass::checkDHCPProcess() DHCP_NAK");
 				_dhcp_state = STATE_DHCP_START;
 			}
 		}
@@ -122,7 +121,6 @@ uint8_t DhcpClass::checkDHCPProcess()
 		}
 
 		if (result != 1 && ((millis() - startTime) > _timeout)){
-			Serial.println("DhcpClass::checkDHCPProcess() error");
 			return 255;
 		}
 	}
@@ -263,11 +261,9 @@ uint8_t DhcpClass::parseDHCPResponse(unsigned long responseTimeout, uint32_t& tr
 		if ((millis() - startTime) > responseTimeout) {
 			return 255;
 		}
-		//delay(50);
-		Serial.println("DhcpClass::parseDHCPResponse() no response packet yet");
+		delay(50);
 		return 0;
 	}
-	Serial.println("DhcpClass::parseDHCPResponse() got response packet!");
 	// start reading in the packet
 	RIP_MSG_FIXED fixedMsg;
 	_dhcpUdpSocket.read((uint8_t*)&fixedMsg, sizeof(RIP_MSG_FIXED));

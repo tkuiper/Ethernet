@@ -39,7 +39,7 @@ int EthernetClass::begin(uint8_t *mac, unsigned long timeout, unsigned long resp
 	SPI.endTransaction();
 
 	// Now try to get our config info from a DHCP server
-	int ret = _dhcp->beginWithDHCP(mac, timeout, responseTimeout);
+	int ret = _dhcp->beginWithDHCP(mac, timeout, responseTimeout, Ethernet._asyncDHCP);
 	if (ret == 1) {
 		// We've successfully found a DHCP server and got our configuration
 		// info, so set things accordingly
@@ -98,6 +98,12 @@ void EthernetClass::begin(uint8_t *mac, IPAddress ip, IPAddress dns, IPAddress g
 #endif
 	SPI.endTransaction();
 	_dnsServerAddress = dns;
+}
+
+void EthernetClass::begin(uint8_t *mac, bool async, unsigned long timeout, unsigned long responseTimeout)
+{
+	Ethernet._asyncDHCP = async;
+	begin(mac,timeout,responseTimeout);
 }
 
 void EthernetClass::init(uint8_t sspin)

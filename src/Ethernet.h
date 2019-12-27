@@ -75,6 +75,7 @@ class EthernetClass {
 private:
 	static IPAddress _dnsServerAddress;
 	static DhcpClass* _dhcp;
+	bool _asyncDHCP;
 public:
 	// Initialise the Ethernet shield to use the provided MAC address and
 	// gain the rest of the configuration through DHCP.
@@ -89,6 +90,7 @@ public:
 	static void begin(uint8_t *mac, IPAddress ip, IPAddress dns);
 	static void begin(uint8_t *mac, IPAddress ip, IPAddress dns, IPAddress gateway);
 	static void begin(uint8_t *mac, IPAddress ip, IPAddress dns, IPAddress gateway, IPAddress subnet);
+	static void begin(uint8_t *mac, bool async, unsigned long timeout = 60000, unsigned long responseTimeout = 4000);
 	static void init(uint8_t sspin = 10);
 
 	static void MACAddress(uint8_t *mac_address);
@@ -296,6 +298,7 @@ private:
 	unsigned long _lastCheckLeaseMillis;
 	uint8_t _dhcp_state;
 	EthernetUDP _dhcpUdpSocket;
+	bool _async;
 
 	int request_DHCP_lease();
 	void reset_DHCP_lease();
@@ -311,7 +314,7 @@ public:
 	IPAddress getDhcpServerIp();
 	IPAddress getDnsServerIp();
 
-	int beginWithDHCP(uint8_t *, unsigned long timeout = 60000, unsigned long responseTimeout = 4000);
+	int beginWithDHCP(uint8_t *, unsigned long timeout = 60000, unsigned long responseTimeout = 4000, bool async = false);
 	int checkLease();
 	uint8_t checkDHCPProcess();
 };
